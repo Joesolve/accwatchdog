@@ -43,11 +43,11 @@ export function rateLimit(config: RateLimitConfig) {
 // Cleanup old entries periodically
 setInterval(() => {
   const now = Date.now();
-  for (const [key, value] of rateLimitStore.entries()) {
+  Array.from(rateLimitStore.entries()).forEach(([key, value]) => {
     if (now > value.resetTime) {
       rateLimitStore.delete(key);
     }
-  }
+  });
 }, 60000); // Clean up every minute
 
 // Helper for API routes

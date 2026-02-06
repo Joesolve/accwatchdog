@@ -266,7 +266,7 @@ export default function ReportCorruptionPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="category">Type of Corruption</Label>
-                    <Select onValueChange={(value) => setValue("category", value)}>
+                    <Select onValueChange={(value) => setValue("category", value as CorruptionReportInput["category"])}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>

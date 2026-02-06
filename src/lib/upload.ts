@@ -1,7 +1,7 @@
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
-import { v4 as uuidv4 } from "crypto";
+import { randomUUID } from "crypto";
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "public/uploads";
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || "10485760"); // 10MB default
@@ -30,7 +30,7 @@ export interface UploadResult {
 
 function generateUniqueFileName(originalName: string): string {
   const ext = path.extname(originalName);
-  const uuid = uuidv4();
+  const uuid = randomUUID();
   return `${uuid}${ext}`;
 }
 
