@@ -1,0 +1,453 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USERS & AUTH ====================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String
+  role          UserRole  @default(VIEWER)
+  avatar        String?
+  isActive      Boolean   @default(true) @map("is_active")
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  auditLogs           AuditLog[]
+  assignedReports     CorruptionReport[]  @relation("AssignedTo")
+  expressionsReviewed ExpressionOfInterest[] @relation("ReviewedBy")
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  oldValues   Json?    @map("old_values")
+  newValues   Json?    @map("new_values")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+// ==================== PROPERTIES & AUCTIONS ====================
+
+model Property {
+  id              String          @id @default(cuid())
+  referenceNumber String          @unique @map("reference_number")
+  title           String
+  slug            String          @unique
+  description     String          @db.Text
+  type            PropertyType
+  status          PropertyStatus  @default(AVAILABLE)
+
+  // Location
+  region          String
+  district        String?
+  address         String?
+  latitude        Float?
+  longitude       Float?
+
+  // Pricing
+  estimatedValue  Decimal         @map("estimated_value") @db.Decimal(15, 2)
+  minimumBid      Decimal?        @map("minimum_bid") @db.Decimal(15, 2)
+  currency        String          @default("SLE")
+
+  // Auction Details
+  auctionDate     DateTime?       @map("auction_date")
+  auctionVenue    String?         @map("auction_venue")
+  auctionEndDate  DateTime?       @map("auction_end_date")
+
+  // Property Details
+  size            String?
+  bedrooms        Int?
+  bathrooms       Int?
+  yearBuilt       Int?            @map("year_built")
+  features        String[]
+
+  // Case Reference
+  caseReference   String?         @map("case_reference")
+  formerOwner     String?         @map("former_owner")
+  recoveryDate    DateTime?       @map("recovery_date")
+
+  // Metadata
+  viewCount       Int             @default(0) @map("view_count")
+  isFeatured      Boolean         @default(false) @map("is_featured")
+  publishedAt     DateTime?       @map("published_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  images              PropertyImage[]
+  documents           PropertyDocument[]
+  expressionsOfInterest ExpressionOfInterest[]
+
+  @@index([status])
+  @@index([type])
+  @@index([region])
+  @@map("properties")
+}
+
+enum PropertyType {
+  RESIDENTIAL
+  COMMERCIAL
+  LAND
+  VEHICLE
+  EQUIPMENT
+  OTHER
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  UNDER_AUCTION
+  SOLD
+  RESERVED
+  WITHDRAWN
+}
+
+model PropertyImage {
+  id          String   @id @default(cuid())
+  propertyId  String   @map("property_id")
+  url         String
+  alt         String?
+  caption     String?
+  isPrimary   Boolean  @default(false) @map("is_primary")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_images")
+}
+
+model PropertyDocument {
+  id          String   @id @default(cuid())
+  propertyId  String   @map("property_id")
+  name        String
+  type        String
+  url         String
+  size        Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_documents")
+}
+
+model ExpressionOfInterest {
+  id                String              @id @default(cuid())
+  referenceNumber   String              @unique @map("reference_number")
+  propertyId        String              @map("property_id")
+
+  // Applicant Details
+  fullName          String              @map("full_name")
+  email             String
+  phone             String
+  organization      String?
+  address           String?
+
+  // Nationality & Identification
+  nationality       String
+  nin               String?             // National Identification Number (for Sierra Leoneans)
+  passportNumber    String?             @map("passport_number") // For non-Sierra Leoneans
+
+  // Interest Details
+  intendedUse       String?             @map("intended_use")
+  proposedAmount    Decimal?            @map("proposed_amount") @db.Decimal(15, 2)
+  message           String?             @db.Text
+
+  // Status
+  status            InterestStatus      @default(PENDING)
+  reviewedById      String?             @map("reviewed_by_id")
+  reviewedAt        DateTime?           @map("reviewed_at")
+  reviewNotes       String?             @map("review_notes") @db.Text
+
+  // Metadata
+  ipAddress         String?             @map("ip_address")
+  submittedAt       DateTime            @default(now()) @map("submitted_at")
+
+  property   Property @relation(fields: [propertyId], references: [id])
+  reviewedBy User?    @relation("ReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([propertyId])
+  @@index([status])
+  @@map("expressions_of_interest")
+}
+
+enum InterestStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+// ==================== STATISTICS & DASHBOARD ====================
+
+model RecoveryStatistic {
+  id              String   @id @default(cuid())
+  period          String   // e.g., "2024-Q1", "2024", "2024-01"
+  periodType      String   @map("period_type") // "monthly", "quarterly", "yearly"
+
+  // Financial Recovery
+  totalRecovered  Decimal  @map("total_recovered") @db.Decimal(15, 2)
+  cashRecovered   Decimal? @map("cash_recovered") @db.Decimal(15, 2)
+  assetsRecovered Decimal? @map("assets_recovered") @db.Decimal(15, 2)
+  fundsToTreasury Decimal? @map("funds_to_treasury") @db.Decimal(15, 2)
+
+  // Case Statistics
+  casesOpened     Int?     @map("cases_opened")
+  casesClosed     Int?     @map("cases_closed")
+  prosecutions    Int?
+  convictions     Int?
+  acquittals      Int?
+
+  // Property Statistics
+  propertiesSeized   Int?  @map("properties_seized")
+  propertiesAuctioned Int? @map("properties_auctioned")
+
+  // Breakdown by sector (JSON for flexibility)
+  sectorBreakdown    Json? @map("sector_breakdown")
+  regionBreakdown    Json? @map("region_breakdown")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([period, periodType])
+  @@map("recovery_statistics")
+}
+
+// ==================== CASE HIGHLIGHTS ====================
+
+model CaseHighlight {
+  id              String    @id @default(cuid())
+  title           String
+  slug            String    @unique
+  summary         String    @db.Text
+  content         String    @db.Text
+
+  // Case Details
+  caseNumber      String?   @map("case_number")
+  defendant       String?
+  charges         String[]
+  verdict         String?
+  sentence        String?
+  amountInvolved  Decimal?  @map("amount_involved") @db.Decimal(15, 2)
+  amountRecovered Decimal?  @map("amount_recovered") @db.Decimal(15, 2)
+
+  // Classification
+  sector          String?
+  region          String?
+  caseDate        DateTime? @map("case_date")
+  verdictDate     DateTime? @map("verdict_date")
+
+  // Media
+  featuredImage   String?   @map("featured_image")
+
+  // Status
+  status          ContentStatus @default(DRAFT)
+  publishedAt     DateTime?     @map("published_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([sector])
+  @@map("case_highlights")
+}
+
+// ==================== NEWS & UPDATES ====================
+
+model NewsUpdate {
+  id              String        @id @default(cuid())
+  title           String
+  slug            String        @unique
+  excerpt         String?       @db.Text
+  content         String        @db.Text
+
+  // Classification
+  category        String?
+  tags            String[]
+
+  // Media
+  featuredImage   String?       @map("featured_image")
+
+  // Status
+  status          ContentStatus @default(DRAFT)
+  publishedAt     DateTime?     @map("published_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([category])
+  @@map("news_updates")
+}
+
+// ==================== EDUCATIONAL RESOURCES ====================
+
+model EducationalResource {
+  id              String        @id @default(cuid())
+  title           String
+  slug            String        @unique
+  description     String        @db.Text
+  content         String?       @db.Text
+
+  // Classification
+  category        String
+  resourceType    String        @map("resource_type") // "article", "video", "pdf", "infographic"
+
+  // Media
+  featuredImage   String?       @map("featured_image")
+  fileUrl         String?       @map("file_url")
+  videoUrl        String?       @map("video_url")
+
+  // Metadata
+  downloadCount   Int           @default(0) @map("download_count")
+
+  // Status
+  status          ContentStatus @default(DRAFT)
+  publishedAt     DateTime?     @map("published_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([category])
+  @@map("educational_resources")
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ==================== CORRUPTION REPORTS ====================
+
+model CorruptionReport {
+  id                String          @id @default(cuid())
+  referenceNumber   String          @unique @map("reference_number")
+
+  // Reporter (optional - can be anonymous)
+  reporterName      String?         @map("reporter_name")
+  reporterEmail     String?         @map("reporter_email")
+  reporterPhone     String?         @map("reporter_phone")
+  isAnonymous       Boolean         @default(true) @map("is_anonymous")
+
+  // Report Details
+  incidentDate      DateTime?       @map("incident_date")
+  incidentLocation  String?         @map("incident_location")
+  region            String?
+
+  // Accused Details
+  accusedName       String?         @map("accused_name")
+  accusedPosition   String?         @map("accused_position")
+  accusedOrganization String?       @map("accused_organization")
+
+  // Description
+  category          String?
+  description       String          @db.Text
+  estimatedAmount   Decimal?        @map("estimated_amount") @db.Decimal(15, 2)
+
+  // Evidence
+  hasEvidence       Boolean         @default(false) @map("has_evidence")
+  evidenceDescription String?       @map("evidence_description") @db.Text
+
+  // Status
+  status            ReportStatus    @default(RECEIVED)
+  priority          ReportPriority  @default(MEDIUM)
+  assignedToId      String?         @map("assigned_to_id")
+
+  // Internal Notes
+  internalNotes     String?         @map("internal_notes") @db.Text
+
+  // Metadata
+  ipAddress         String?         @map("ip_address")
+  submittedAt       DateTime        @default(now()) @map("submitted_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  assignedTo  User?                 @relation("AssignedTo", fields: [assignedToId], references: [id])
+  attachments ReportAttachment[]
+
+  @@index([status])
+  @@index([assignedToId])
+  @@map("corruption_reports")
+}
+
+model ReportAttachment {
+  id          String   @id @default(cuid())
+  reportId    String   @map("report_id")
+  fileName    String   @map("file_name")
+  fileType    String   @map("file_type")
+  fileSize    Int      @map("file_size")
+  url         String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  report CorruptionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_attachments")
+}
+
+enum ReportStatus {
+  RECEIVED
+  UNDER_REVIEW
+  INVESTIGATING
+  CLOSED_SUBSTANTIATED
+  CLOSED_UNSUBSTANTIATED
+  REFERRED
+}
+
+enum ReportPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ==================== SITE SETTINGS ====================
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+}
+
+// ==================== EMAIL SUBSCRIPTIONS ====================
+
+model EmailSubscription {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  categories    String[]
+  isActive      Boolean   @default(true) @map("is_active")
+  confirmedAt   DateTime? @map("confirmed_at")
+  unsubscribedAt DateTime? @map("unsubscribed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@map("email_subscriptions")
+}
