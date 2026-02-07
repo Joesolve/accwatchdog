@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import Link from "next/link";
 import { Plus, Edit, BarChart3 } from "lucide-react";
 import prisma from "@/lib/prisma";

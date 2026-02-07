@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { Metadata } from "next";
 import Link from "next/link";
 import { Scale, Calendar, MapPin, Banknote, ArrowRight } from "lucide-react";

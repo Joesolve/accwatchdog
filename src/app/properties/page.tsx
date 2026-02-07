@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { Suspense } from "react";
 import { Metadata } from "next";
 import { Building2, Grid3X3, List } from "lucide-react";

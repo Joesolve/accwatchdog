@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import Link from "next/link";
 import { Plus, Edit, Trash2, UserCheck, UserX, Shield } from "lucide-react";
 import prisma from "@/lib/prisma";
